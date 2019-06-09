@@ -1,0 +1,17 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+airflow_salesforce_plugin = {editable = true, git = "git@github.com:sensus-business-automation/airflow-salesforce-plugin.git", ref = "feature/pandas-export"}
+airflow_postgres_plugin = {editable = true, git = "git@github.com:sensus-business-automation/airflow-postgres-plugin.git", ref = "update-plugin-syntax"}
+
+[packages]
+"airflow-dags" = {editable = true, path = ".", extras = ["dev", "tests", "docs"]}
+
+[requires]
+python_version = "3.7"
+
+[pipenv]
+allow_prereleases = true
