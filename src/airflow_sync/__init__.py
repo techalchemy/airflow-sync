@@ -11,7 +11,7 @@ import airflow.sensors
 import pkg_resources
 from airflow.utils.log.logging_mixin import LoggingMixin
 
-__version__ = "0.0.3"
+__version__ = "0.0.2"
 log = LoggingMixin().log
 
 
