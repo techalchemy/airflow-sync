@@ -11,7 +11,7 @@ s3fs = "<=0.1.6"
 "airflow-sync" = {editable = true, path = ".", extras = ["dev", "tests", "docs"]}
 
 [requires]
-python_version = "3.7"
+python_version = "3.6"
 
 [pipenv]
 allow_prereleases = true

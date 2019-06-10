@@ -2,7 +2,7 @@
 from collections import OrderedDict, namedtuple
 from itertools import chain, tee
 from pathlib import Path
-from typing import FrozenSet, List, Optional, Set, Tuple, TypeVar, Union
+from typing import FrozenSet, List, NamedTuple, Optional, Set, Tuple, TypeVar, Union
 
 import attr
 from airflow.models import Variable
@@ -12,6 +12,12 @@ TRIGGER_TYPES = ("upsert", "delete", "insert", "update")
 pipeline = namedtuple(
     "SqlPipe", ["path", "trigger_path", "dependencies"], defaults=(None, None, None)
 )
+
+
+class Pipeline(NamedTuple):
+    path: str = None
+    trigger_path: List[str] = None
+    dependencies: List[str] = None
 
 
 def get_sql_dir():
@@ -303,7 +309,7 @@ class SqlFile:
         return cls.build_triggers(path_sqlfile, triggers, dependencies)
 
 
-def get_upsert_mapping(pipeline_list, allow_upsert=False):
+def get_upsert_mapping(pipeline_list: List[Pipeline], allow_upsert: bool = False):
     """Given a list of **pipeline** instances, create dependency graphs and return them.
 
     :param pipeline_list: A list of `namedtuple` instances with (file, trigger, deps)

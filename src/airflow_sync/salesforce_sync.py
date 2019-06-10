@@ -19,7 +19,7 @@ from airflow_postgres_plugin.operators import FileToPostgresTableOperator
 from airflow_salesforce_plugin.operators import SalesforceToFileOperator
 
 from airflow_sync.sync import _cleanup, _run_sql, _sync_interval, _upsert_table
-from airflow_sync.utils import SqlFile, get_sql_dir, get_upsert_mapping, pipeline
+from airflow_sync.utils import SqlFile, get_sql_dir, get_upsert_mapping
 
 log = LoggingMixin().log
 
