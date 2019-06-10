@@ -3,6 +3,7 @@
 
 import concurrent
 import concurrent.futures
+import fnmatch
 import gzip
 import hashlib
 import json
@@ -239,3 +240,16 @@ def upload_files_to_s3(
             result_map = executor.map(upload_file, paths)
     results = [r for r in result_map if r is not None]
     return ",".join(results)
+
+
+def get_s3_files(s3_conn_id: str, s3_bucket: str, prefix="") -> List[str]:
+    hook = S3Hook(s3_conn_id)
+    formatted_date = datetime.today().strftime("%Y-%m-%d")
+    file_format = f"*.csv_{formatted_date}.gz"
+    matches = (
+        key
+        for key in hook.list_keys(s3_bucket, prefix=prefix)
+        if fnmatch.fnmatch(key, file_format)
+    )
+    rv = list(matches)
+    return rv

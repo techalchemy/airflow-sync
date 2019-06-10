@@ -1,11 +1,9 @@
 [[source]]
-name = "pypi"
-url = "https://pypi.org/simple"
+name = "azure"
+url = "https://${AIRFLOW_FEED_NAME}:${AIRFLOW_FEED_TOKEN}@pkgs.dev.azure.com/snapmetrix/_packaging/airflow-feed/pypi/simple/"
 verify_ssl = true
 
 [dev-packages]
-airflow_salesforce_plugin = {editable = true, git = "git@github.com:sensus-business-automation/airflow-salesforce-plugin.git", ref = "feature/pandas-export"}
-airflow_postgres_plugin = {editable = true, git = "git@github.com:sensus-business-automation/airflow-postgres-plugin.git", ref = "update-plugin-syntax"}
 
 [packages]
 "airflow-dags" = {editable = true, path = ".", extras = ["dev", "tests", "docs"]}
