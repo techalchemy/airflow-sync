@@ -9,14 +9,10 @@ from airflow.models import Variable
 
 TRIGGER_TYPES = ("upsert", "delete", "insert", "update")
 
-pipeline = namedtuple(
-    "SqlPipe", ["path", "trigger_path", "dependencies"], defaults=(None, None, None)
-)
-
 
 class Pipeline(NamedTuple):
     path: str = None
-    trigger_path: List[str] = None
+    trigger_path: str = None
     dependencies: List[str] = None
 
 
