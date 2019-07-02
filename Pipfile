@@ -4,10 +4,9 @@ url = "https://${AZURE_FEED_NAME}:${AZURE_FEED_TOKEN}@pkgs.dev.azure.com/snapmet
 verify_ssl = true
 
 [dev-packages]
-"apache-airflow" = {extras = ["crypto", "celery", "postgres", "jdbc", "mssql", "redis", "ssh", "s3","password"], version = "<=1.10.1"}
+"apache-airflow" = {extras = ["crypto", "celery", "postgres", "jdbc", "mssql", "redis", "ssh", "s3","password"], version = "<=1.10.3"}
 
 [packages]
-s3fs = "<=0.1.13"
 "airflow-sync" = {editable = true, path = ".", extras = ["dev", "tests", "docs"]}
 
 [requires]
