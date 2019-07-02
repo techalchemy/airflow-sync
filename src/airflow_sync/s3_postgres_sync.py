@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
+import csv
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from airflow import DAG
 from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
+from airflow.utils.log.logging_mixin import LoggingMixin
 from airflow_postgres_plugin.hooks import PostgresHook
 from airflow_postgres_plugin.operators import PandasToPostgresTableOperator
 
@@ -15,6 +18,8 @@ from airflow_sync.sync import (
     _upsert_table,
     get_s3_files,
 )
+
+log = LoggingMixin().log
 
 dag_default_args = {
     "owner": "airflow",
@@ -31,7 +36,7 @@ def create_dag(
     dag_name: str,
     pg_conn_id: str = None,
     s3_conn_id: str = None,
-    owner: str = "airflow",
+    owner: str = None,
     variable_key: str = None,
 ):
     if variable_key is None:
@@ -42,13 +47,31 @@ def create_dag(
     S3_BUCKET = CONSTANTS.get("s3_bucket")
     SYNC_DELTA = CONSTANTS.get("sync_delta", {"days": -10})
     SYNC_INTERVAL = CONSTANTS.get("sync_interval", "10 5 * * *")
+    if owner is not None:
+        dag_default_args.update({"owner": owner})
     dag = DAG(
         dag_name,
         default_args=dag_default_args,
         schedule_interval=SYNC_INTERVAL,
         catchup=False,
-        owner=owner,
     )
+
+    files = get_s3_files(S3_CONNECTION, S3_BUCKET)
+    log.debug("Found S3 Files: {0}".format(files))
+
+    def get_s3_uri(filename: str, **context) -> str:
+        new_uri = f"s3://{S3_BUCKET}/{filename}"
+        log.debug(f"converting uri to s3 format: {filename} -> {new_uri}")
+        return new_uri
+
+    def _sync_join(**context):
+        join_results = []
+        instance = context["task_instance"]
+        for fn in files:
+            log.info(f"Found file: {fn}")
+            result = instance.xcom_pull(task_ids=f"load_s3_file.{fn}")
+            join_results.append((result, fn))
+        return join_results
 
     sync_interval = PythonOperator(
         task_id="sync_interval",
@@ -62,19 +85,6 @@ def create_dag(
             )
         },
     )
-
-    files = get_s3_files(S3_CONNECTION, S3_BUCKET)
-
-    def get_s3_uri(filename):
-        return f"s3://{S3_BUCKET}/{fn}"
-
-    def _sync_join(**context):
-        join_results = []
-        instance = context["task_instance"]
-        for fn in files:
-            result = instance.xcom_pull(task_ids=f"load_s3_file.{fn}")
-            join_results.append((result, fn))
-        return join_results
 
     sync_join = PythonOperator(
         task_id="sync_join",
@@ -90,20 +100,23 @@ def create_dag(
             task_id=f"get_s3_uri.{fn}",
             python_callable=get_s3_uri,
             op_kwargs={"filename": fn},
-            provide_context=False,
+            provide_context=True,
             dag=dag,
         )
+        sync_interval.set_downstream(s3_uri)
 
         load_s3_file = PandasToPostgresTableOperator(
             task_id=f"load_s3_file.{fn}",
             conn_id=PG_CONN_ID,
             schema="whs",
-            table=fn.rsplit(".", len(Path(fn).suffixes))[0],
-            sep=r"\t",
+            table=fn.rsplit(os.extsep, 2)[0],
+            sep="\t",
             compression="gzip",
-            filepath=f"{{ task_instance.xcom_pull(task_ids='get_s3_uri.{fn}') }}",
+            filepath=("{{ task_instance.xcom_pull(task_ids=" f"'get_s3_uri.{fn}')" "}}"),
             s3_conn_id=S3_CONNECTION,
+            include_index=False,
             provide_context=True,
+            quoting=csv.QUOTE_NONE,
             templates_dict={
                 "polling_interval.start_datetime": (
                     "{{ task_instance.xcom_pull(task_ids='sync_interval') }}"
@@ -114,6 +127,8 @@ def create_dag(
             },
             dag=dag,
         )
+        s3_uri.set_downstream(load_s3_file)
+        sync_join.set_upstream(load_s3_file)
 
-        sync_interval >> s3_uri >> load_s3_file >> sync_join
+        # sync_interval >> s3_uri >> load_s3_file >> sync_join
     return dag

@@ -15,6 +15,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
+import dateutil.parser
 import sqlalchemy
 from airflow import DAG
 from airflow.hooks.S3_hook import S3Hook
@@ -36,7 +37,7 @@ def _sync_interval(delta: Optional[Dict[str, int]], **context) -> str:
         delta = {"days": -10}
     templates_dict: Dict[str, str] = context.get("templates_dict", {})
     if "polling_interval.start_date" in templates_dict:
-        start_datetime = datetime.fromisoformat(
+        start_datetime = dateutil.parser.isoparse(
             templates_dict["polling_interval.start_date"]
         ).replace(tzinfo=None)
     else:
@@ -244,7 +245,7 @@ def upload_files_to_s3(
 
 def get_s3_files(s3_conn_id: str, s3_bucket: str, prefix="") -> List[str]:
     hook = S3Hook(s3_conn_id)
-    formatted_date = datetime.today().strftime("%Y-%m-%d")
+    formatted_date = (datetime.today() + timedelta(days=-1)).strftime("%Y-%m-%d")
     file_format = f"*.csv_{formatted_date}.gz"
     matches = (
         key
