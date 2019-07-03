@@ -43,15 +43,14 @@ def create_dag(
     dag = DAG(
         dag_name,
         default_args={
-            "owner": "cx",
             "depends_on_past": DEPENDS_ON_PAST,
             "start_date": START_DATE,
             "retries": 1,
             "retry_delay": timedelta(seconds=10),
+            "owner": owner,
         },
         schedule_interval=SYNC_INTERVAL,
         catchup=CATCHUP,
-        owner=owner,
     )
 
     # operator definitions --------------------------------------------------------------
