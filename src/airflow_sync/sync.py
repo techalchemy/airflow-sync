@@ -153,7 +153,7 @@ def upload_file_to_s3(
     if s3_hook is None:
         if s3_conn_id is None:
             raise TypeError(f"Expected string for s3_conn_id, received {s3_conn_id!r}")
-        s3_hook = S3Hook(s3_conn_id)
+        s3_hook = S3Hook(s3_conn_id, verify=False)
     if s3_hook.check_for_key(record_key, bucket_name=s3_bucket):
         log.warning(f"overwriting existing file for {record_key!r} in {s3_hook!r}")
     else:
@@ -232,7 +232,7 @@ def upload_files_to_s3(
 
     if filepaths:
         log.info(f"Connecting to s3 connection: {s3_conn_id}")
-        hook = S3Hook(s3_conn_id)
+        hook = S3Hook(s3_conn_id, verify=False)
         filepath_list = filepaths.split(",")
         paths = [(os.path.abspath(fp), hook) for fp in filepath_list]
         with concurrent.futures.ThreadPoolExecutor(
@@ -244,7 +244,7 @@ def upload_files_to_s3(
 
 
 def get_s3_files(s3_conn_id: str, s3_bucket: str, prefix="") -> List[str]:
-    hook = S3Hook(s3_conn_id)
+    hook = S3Hook(s3_conn_id, verify=False)
     formatted_date = (datetime.today() + timedelta(days=-1)).strftime("%Y-%m-%d")
     file_format = f"*.csv_{formatted_date}.gz"
     matches = (
