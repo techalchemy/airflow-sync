@@ -5,11 +5,14 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from airflow import DAG
+from airflow.hooks.postgres_plugin import PostgresHook
 from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
 from airflow.utils.log.logging_mixin import LoggingMixin
-from airflow_postgres_plugin.hooks import PostgresHook
-from airflow_postgres_plugin.operators import PandasToPostgresTableOperator
+from airflow_postgres_plugin.operators import (
+    PandasToPostgresBulkOperator,
+    PandasToPostgresTableOperator,
+)
 
 from airflow_sync.sync import (
     _cleanup,
@@ -26,9 +29,9 @@ dag_default_args = {
     "depends_on_past": False,
     "start_date": datetime(2019, 2, 21),
     "retries": 1,
-    "retry_delay": timedelta(minutes=0.5),
+    "retry_delay": timedelta(minutes=0.25),
     "max_active_runs": 1,
-    "concurrency": 10,
+    "concurrency": 32,
 }
 
 
@@ -64,6 +67,9 @@ def create_dag(
         log.debug(f"converting uri to s3 format: {filename} -> {new_uri}")
         return new_uri
 
+    def get_s3_uris(**context) -> str:
+        return ",".join([get_s3_uri(fn) for fn in get_s3_files(S3_CONNECTION, S3_BUCKET)])
+
     def _sync_join(**context):
         join_results = []
         instance = context["task_instance"]
@@ -85,6 +91,34 @@ def create_dag(
             )
         },
     )
+
+    # s3_uris = PythonOperator(
+    #     task_id="get_s3_uris", python_callable=get_s3_uris, dag=dag, provide_context=True  # noqa
+    # )
+
+    # load_s3_files = PandasToPostgresBulkOperator(
+    #     task_id="load_s3_files",
+    #     conn_id=PG_CONN_ID,
+    #     schema="whs",
+    #     sep="\t",
+    #     compression="gzip",
+    #     filepaths="{{ task_instance.xcom_pull(task_ids='get_s3_uris') }}",
+    #     s3_conn_id=S3_CONNECTION,
+    #     include_index=False,
+    #     provide_context=True,
+    #     quoting=csv.QUOTE_NONE,
+    #     templates_dict={
+    #         "polling_interval.start_datetime": (
+    #             "{{ task_instance.xcom_pull(task_ids='sync_interval') }}"
+    #         ),
+    #         "polling_interval.end_datetime": (
+    #             "{{ execution_date._datetime.replace(tzinfo=None).isoformat() }}"
+    #         ),
+    #     },
+    #     dag=dag,
+    # )
+
+    # sync_interval >> s3_uris >> load_s3_files
 
     sync_join = PythonOperator(
         task_id="sync_join",
@@ -130,5 +164,5 @@ def create_dag(
         s3_uri.set_downstream(load_s3_file)
         sync_join.set_upstream(load_s3_file)
 
-        # sync_interval >> s3_uri >> load_s3_file >> sync_join
+    sync_interval >> s3_uri >> load_s3_file >> sync_join
     return dag
