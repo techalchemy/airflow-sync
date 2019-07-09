@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List
 
+import gevent
 from airflow import DAG
 from airflow.hooks.postgres_plugin import PostgresHook
 from airflow.models import Variable
@@ -15,13 +16,18 @@ from airflow_postgres_plugin.operators import (
     PandasToPostgresTableOperator,
 )
 
-from airflow_sync.sync import (
+# fmt: off
+gevent.monkey.patch_all()
+
+from airflow_sync.sync import (  # noqa  # isort:skip
     _cleanup,
     _run_sql,
     _sync_interval,
     _upsert_table,
     get_s3_files,
 )
+# fmt: on
+
 
 log = LoggingMixin().log
 
