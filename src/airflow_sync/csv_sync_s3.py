@@ -27,10 +27,10 @@ dag_default_args = {
 
 def create_dag(
     dag_name: str,
-    pg_conn_id: str,
-    s3_conn_id: str,
-    s3_bucket: str,
-    sync_interval: str,
+    pg_conn_id: str = None,
+    s3_conn_id: str = None,
+    s3_bucket: str = None,
+    sync_interval: str = None,
     dag_base: str = None,
     concurrent_uploads: str = "10",
     upload_timeout: str = "600",
@@ -42,10 +42,18 @@ def create_dag(
             CONSTANTS = Variable.get(dag_base, deserialize_json=True)
         else:
             CONSTANTS = Variable.get(dag_name, deserialize_json=True)
+        pg_conn_key = next(
+            iter([k for k in ("postgres_connection", "pg_connection") if k in CONSTANTS]),
+            None,
+        )
         s3_conn_id = CONSTANTS["s3_connection"] if not s3_conn_id else s3_conn_id
-        pg_conn_id = CONSTANTS["pg_connection"] if not pg_conn_id else pg_conn_id
+        pg_conn_id = CONSTANTS[pg_conn_key] if not pg_conn_id else pg_conn_id
         s3_bucket = CONSTANTS["s3_bucket"] if not s3_bucket else s3_bucket
-        sync_interval = CONSTANTS["sync_interval"] if not sync_interval else sync_interval
+        sync_interval = (
+            CONSTANTS.get("sync_interval", "5 6 * * * ")
+            if not sync_interval
+            else sync_interval
+        )
         concurrent_uploads = CONSTANTS.get("concurrent_uploads", concurrent_uploads)
         upload_timeout = CONSTANTS.get("upload_timeout", upload_timeout)
         csv_dir = CONSTANTS.get("csv_dir", csv_dir)
