@@ -20,7 +20,6 @@ from airflow_sync.sync import (  # noqa  # isort:skip
     _run_sql,
     _sync_interval,
     _upsert_table,
-    get_s3_files,
 )
 
 
@@ -33,7 +32,7 @@ dag_default_args = {
     "retries": 1,
     "retry_delay": timedelta(minutes=0.25),
     "max_active_runs": 1,
-    "concurrency": 32,
+    "concurrency": 16,
 }
 
 
@@ -43,6 +42,7 @@ def create_dag(
     s3_conn_id: str = None,
     owner: str = None,
     variable_key: str = None,
+    tables: List[str] = None,
 ):
     if variable_key is None:
         variable_key = dag_name
@@ -61,23 +61,28 @@ def create_dag(
         catchup=False,
     )
 
-    files = get_s3_files(S3_CONNECTION, S3_BUCKET)
-    log.debug("Found S3 Files: {0}".format(files))
+    # files = get_s3_files(S3_CONNECTION, S3_BUCKET)
+    # log.debug("Found S3 Files: {0}".format(files))
 
     def get_s3_uri(filename: str, **context) -> str:
         new_uri = f"s3://{S3_BUCKET}/{filename}"
         log.debug(f"converting uri to s3 format: {filename} -> {new_uri}")
         return new_uri
 
+    def convert_table_to_file(table: str) -> str:
+        return get_s3_uri(f"{table}.csv")
+
     def get_s3_uris() -> List[str]:
-        s3_uris = [get_s3_uri(fn) for fn in files]
+        s3_uris = [get_s3_uri(fn) for fn in tables]
         return s3_uris
+
+    files = [convert_table_to_file(table) for table in tables]
+    uris = [get_s3_uri(fn) for fn in files]
 
     def _sync_join(**context):
         join_results = []
         instance = context["task_instance"]
         for fn in files:
-            log.debug(f"Found file: {fn}")
             result = instance.xcom_pull(task_ids=f"load_s3_file.{fn}")
             join_results.append((result, fn))
         return join_results
@@ -126,7 +131,7 @@ def create_dag(
     )
 
     # for fn in files:
-    for s3_uri in get_s3_uris():
+    for s3_uri in uris:
 
         # s3_uri = PythonOperator(
         #     task_id=f"get_s3_uri.{fn}",
