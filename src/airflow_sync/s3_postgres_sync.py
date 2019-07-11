@@ -20,6 +20,8 @@ from airflow_sync.sync import (  # noqa  # isort:skip
     _run_sql,
     _sync_interval,
     _upsert_table,
+    _cleanup,
+    get_s3_files,
 )
 
 
@@ -61,6 +63,8 @@ def create_dag(
         catchup=False,
     )
 
+    if not tables:
+        tables = [fn.split(".")[0] for fn in get_s3_files(S3_CONNECTION, S3_BUCKET)]
     # files = get_s3_files(S3_CONNECTION, S3_BUCKET)
     # log.debug("Found S3 Files: {0}".format(files))
 
@@ -86,6 +90,18 @@ def create_dag(
             result = instance.xcom_pull(task_ids=f"load_s3_file.{fn}")
             join_results.append((result, fn))
         return join_results
+
+    def _cleanup_temp_table(context):
+        instance = context["task_instance"]
+        table_name = instance.task_id.split(".")[-1]
+        temp_table = context["task_instance"].xcom_pull(
+            task_ids=f"load_s3_file.{table_name}"
+        )
+        templates_dict = context.get("templates_dict", {}).update(
+            {"temp_table": temp_table}
+        )
+        context["templates_dict"] = templates_dict
+        _cleanup(PG_CONN_ID, schema="whs", context=context)
 
     sync_interval = PythonOperator(
         task_id="sync_interval",
@@ -154,6 +170,9 @@ def create_dag(
             s3_conn_id=S3_CONNECTION,
             include_index=False,
             quoting=csv.QUOTE_NONE,
+            temp_table=True,
+            on_failure_callback=_cleanup_temp_table,
+            on_retry_callback=_cleanup_temp_table,
             templates_dict={
                 "polling_interval.start_datetime": (
                     "{{ task_instance.xcom_pull(task_ids='sync_interval') }}"
@@ -164,8 +183,45 @@ def create_dag(
             },
             dag=dag,
         )
+
+        upsert_table = PythonOperator(
+            task_id=f"upsert_postgres_table.{fn}",
+            python_callable=_upsert_table,
+            op_kwargs={"table": fn, "pg_conn_id": PG_CONN_ID, "schema": "whs"},
+            provide_context=True,
+            templates_dict={
+                "polling_interval.start_datetime": (
+                    "{{ task_instance.xcom_pull(task_ids='sync_interval') }}"
+                ),
+                "polling_interval.end_datetime": (
+                    "{{ execution_date._datetime.replace(tzinfo=None).isoformat() }}"
+                ),
+                "from_table": (
+                    "{{ task_instance.xcom_pull(" f"task_ids='load_s3_file.{fn}'" ") }}"
+                ),
+            },
+            on_failure_callback=_cleanup_temp_table,
+            dag=dag,
+        )
+
+        cleanup = PythonOperator(
+            task_id=f"cleanup.{fn}",
+            python_callable=_cleanup,
+            op_kwargs={"pg_conn_id": PG_CONN_ID, "schema": "whs"},
+            provide_context=True,
+            templates_dict={
+                "temp_table": (
+                    "{{ task_instance.xcom_pull(" f"task_ids='load_s3_file.{fn}'" ") }}"
+                )
+            },
+            dag=dag,
+            trigger_rule="all_done",
+        )
+
         sync_interval.set_downstream(load_s3_file)
-        sync_join.set_upstream(load_s3_file)
+        load_s3_file.set_downstream(upsert_table)
+        upsert_table.set_downstream(cleanup)
+        sync_join.set_upstream(cleanup)
     #     s3_uri.set_downstream(load_s3_file)
 
     # sync_interval >> s3_uri >> load_s3_file >> sync_join
