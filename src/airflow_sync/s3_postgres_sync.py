@@ -3,7 +3,7 @@ import csv
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List
+from typing import List, NamedTuple, Optional
 
 from airflow import DAG
 from airflow.hooks.postgres_plugin import PostgresHook
@@ -23,6 +23,12 @@ from airflow_sync.sync import (  # noqa  # isort:skip
     _cleanup,
     get_s3_files,
 )
+
+
+class S3File(NamedTuple):
+    uri: str = ""
+    filename: str = ""
+    table: str = ""
 
 
 log = LoggingMixin().log
@@ -74,20 +80,25 @@ def create_dag(
         return new_uri
 
     def convert_table_to_file(table: str) -> str:
-        return get_s3_uri(f"{table}.csv")
+        formatted_date = (datetime.today() + timedelta(days=-1)).strftime("%Y-%m-%d")
+        return f"{table}.csv_{formatted_date}.gz"
 
-    def get_s3_uris() -> List[str]:
+    def get_s3_uris(tables: Optional[List[str]]) -> List[str]:
+        if not tables:
+            tables = [
+                fn.split(".")[0] for fn in get_s3_files(S3_CONNECTION, S3_BUCKET)
+            ]  # type: ignore  # noqa:E501
         s3_uris = [get_s3_uri(fn) for fn in tables]
         return s3_uris
 
-    files = [convert_table_to_file(table) for table in tables]
-    uris = [get_s3_uri(fn) for fn in files]
+    files = [(table, convert_table_to_file(table)) for table in tables]
+    uris = [S3File(uri=get_s3_uri(fn), filename=fn, table=table) for table, fn in files]
 
     def _sync_join(**context):
         join_results = []
         instance = context["task_instance"]
-        for fn in files:
-            result = instance.xcom_pull(task_ids=f"load_s3_file.{fn}")
+        for fn in uris:
+            result = instance.xcom_pull(task_ids=f"load_s3_file.{fn.table}")
             join_results.append((result, fn))
         return join_results
 
@@ -147,7 +158,7 @@ def create_dag(
     )
 
     # for fn in files:
-    for s3_uri in uris:
+    for uri in uris:
 
         # s3_uri = PythonOperator(
         #     task_id=f"get_s3_uri.{fn}",
@@ -157,15 +168,15 @@ def create_dag(
         #     dag=dag,
         # )
         # sync_interval.set_downstream(s3_uri)
-        _, _, fn = s3_uri.rpartition("/")
+        # _, _, fn = uri.rpartition("/")
         load_s3_file = PandasToPostgresTableOperator(
-            task_id=f"load_s3_file.{fn}",
+            task_id=f"load_s3_file.{uri.table}",
             conn_id=PG_CONN_ID,
             schema="whs",
-            table=fn.rsplit(os.extsep, 2)[0],
+            table=uri.table,
             sep="\t",
             compression="gzip",
-            filepath=s3_uri,
+            filepath=uri.uri,
             # filepath=("{{ task_instance.xcom_pull(task_ids=" f"'get_s3_uri.{fn}')" "}}"),  # noqa
             s3_conn_id=S3_CONNECTION,
             include_index=False,
@@ -185,9 +196,9 @@ def create_dag(
         )
 
         upsert_table = PythonOperator(
-            task_id=f"upsert_postgres_table.{fn}",
+            task_id=f"upsert_postgres_table.{uri.table}",
             python_callable=_upsert_table,
-            op_kwargs={"table": fn, "pg_conn_id": PG_CONN_ID, "schema": "whs"},
+            op_kwargs={"table": uri.table, "pg_conn_id": PG_CONN_ID, "schema": "whs"},
             provide_context=True,
             templates_dict={
                 "polling_interval.start_datetime": (
@@ -197,7 +208,8 @@ def create_dag(
                     "{{ execution_date._datetime.replace(tzinfo=None).isoformat() }}"
                 ),
                 "from_table": (
-                    "{{ task_instance.xcom_pull(" f"task_ids='load_s3_file.{fn}'" ") }}"
+                    "{{ task_instance.xcom_pull("
+                    f"task_ids='load_s3_file.{uri.table}') }}"
                 ),
             },
             on_failure_callback=_cleanup_temp_table,
@@ -205,13 +217,15 @@ def create_dag(
         )
 
         cleanup = PythonOperator(
-            task_id=f"cleanup.{fn}",
+            task_id=f"cleanup.{uri.table}",
             python_callable=_cleanup,
             op_kwargs={"pg_conn_id": PG_CONN_ID, "schema": "whs"},
             provide_context=True,
             templates_dict={
                 "temp_table": (
-                    "{{ task_instance.xcom_pull(" f"task_ids='load_s3_file.{fn}'" ") }}"
+                    "{{ task_instance.xcom_pull("
+                    f"task_ids='load_s3_file.{uri.table}'"
+                    ") }}"
                 )
             },
             dag=dag,
