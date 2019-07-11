@@ -38,14 +38,23 @@ def dedup(iterable):
     return iter(OrderedDict.fromkeys(iterable))
 
 
+class SqlFile__MetaClass(type):
+    @property
+    def DEFAULT_SQL_DIR(cls):
+        sql_dir = Path(Variable.get("sql_dir"))
+        if not sql_dir.exists():
+            PKG_PARENT = Path(__file__).absolute().parent.parent.parent.parent
+            sql_dir = PKG_PARENT / "airflow-core/sql"
+        return sql_dir / "salesforce"
+
+
 @attr.s(frozen=True)
-class SqlFile:
+class SqlFile(metaclass=SqlFile__MetaClass):
     path = attr.ib(type=Path, converter=convert_path)
     sql = attr.ib(type=str, default=None)
     dependencies = attr.ib(factory=tuple, hash=False, type=Tuple["SqlFile"])
     dependants = attr.ib(factory=tuple, hash=False, type=Tuple["SqlFile"])
     triggers = attr.ib(factory=tuple, hash=False, type=Tuple["SqlFile"])
-    DEFAULT_SQL_DIR = get_sql_dir() / "salesforce"
 
     @property
     def name(self) -> str:
