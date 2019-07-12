@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, NamedTuple, Optional
 
+import airflow
 from airflow import DAG
 from airflow.hooks.postgres_plugin import PostgresHook
 from airflow.models import Variable
@@ -36,7 +37,7 @@ log = LoggingMixin().log
 dag_default_args = {
     "owner": "airflow",
     "depends_on_past": False,
-    "start_date": datetime(2019, 2, 21),
+    "start_date": airflow.utils.dates.days_ago(2),
     "retries": 1,
     "retry_delay": timedelta(minutes=0.25),
     "max_active_runs": 1,
