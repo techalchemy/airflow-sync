@@ -52,6 +52,8 @@ def create_dag(
     owner: str = None,
     variable_key: str = None,
     tables: List[str] = None,
+    pool: str = None,
+    **dag_defaults,
 ):
     if variable_key is None:
         variable_key = dag_name
@@ -63,6 +65,7 @@ def create_dag(
     SYNC_INTERVAL = CONSTANTS.get("sync_interval", "10 5 * * *")
     if owner is not None:
         dag_default_args.update({"owner": owner})
+    dag_default_args.update(dag_defaults)
     dag = DAG(
         dag_name,
         default_args=dag_default_args,
@@ -178,7 +181,7 @@ def create_dag(
             sep="\t",
             compression="gzip",
             filepath=uri.uri,
-            # filepath=("{{ task_instance.xcom_pull(task_ids=" f"'get_s3_uri.{fn}')" "}}"),  # noqa
+            pool=pool if pool else "default",
             s3_conn_id=S3_CONNECTION,
             include_index=False,
             quoting=csv.QUOTE_NONE,
@@ -201,6 +204,7 @@ def create_dag(
             python_callable=_upsert_table,
             op_kwargs={"table": uri.table, "pg_conn_id": PG_CONN_ID, "schema": "whs"},
             provide_context=True,
+            pool=pool if pool else "default",
             templates_dict={
                 "polling_interval.start_datetime": (
                     "{{ task_instance.xcom_pull(task_ids='sync_interval') }}"
@@ -222,6 +226,7 @@ def create_dag(
             python_callable=_cleanup,
             op_kwargs={"pg_conn_id": PG_CONN_ID, "schema": "whs"},
             provide_context=True,
+            pool=pool if pool else "default",
             templates_dict={
                 "temp_table": (
                     "{{ task_instance.xcom_pull("

@@ -29,6 +29,7 @@ def create_dag(
     sync_file: SqlFile = None,
     triggers: List[SqlFile] = None,
     deps: List[SqlFile] = None,
+    **dag_defaults,
 ):
     if dag_base is not None:
         CONSTANTS = Variable.get(dag_base, deserialize_json=True)
@@ -54,17 +55,19 @@ def create_dag(
             return
 
     # dag definitions --------------------------------------------------------------------
+    default_args = {
+        "owner": owner,
+        "depends_on_past": DEPENDS_ON_PAST,
+        "start_date": START_DATE,
+        "retries": 1,
+        "retry_delay": timedelta(minutes=0.5),
+    }
+    default_args.update(dag_defaults)
     dag = DAG(
         dag_name,
-        default_args={
-            "owner": owner,
-            "depends_on_past": DEPENDS_ON_PAST,
-            "start_date": START_DATE,
-            "retries": 1,
-            "retry_delay": timedelta(minutes=0.5),
-        },
         schedule_interval=SYNC_INTERVAL,
         catchup=CATCHUP,
+        default_args=default_args,
     )
 
     # callable definitions ---------------------------------------------------------------

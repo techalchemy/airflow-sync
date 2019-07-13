@@ -36,6 +36,7 @@ def create_dag(
     upload_timeout: str = "600",
     csv_dir: str = "/data_files",
     owner: str = "airflow",
+    **dag_defaults,
 ):
     if pg_conn_id is None or s3_conn_id is None or s3_bucket is None:
         if dag_base is not None:
@@ -61,7 +62,7 @@ def create_dag(
 
     upload_timeout_int = int(upload_timeout)  # noqa
     concurrent_uploads_int = int(concurrent_uploads)
-
+    dag_default_args.update(dag_defaults)
     dag = DAG(
         dag_name,
         default_args=dag_default_args,

@@ -33,6 +33,7 @@ def create_dag(
     catchup: bool = False,
     owner: str = "airflow",
     sql_files: List[Tuple[str, ...]] = None,
+    **dag_defaults,
 ):
     CONSTANTS = Variable.get(dag_name, deserialize_json=True)
     PG_CONN_ID = CONSTANTS["postgres_connection"]
@@ -55,17 +56,19 @@ def create_dag(
             return
 
     # dag definitions -------------------------------------------------------------------
+    dag_default_args = {
+        "owner": owner,
+        "depends_on_past": DEPENDS_ON_PAST,
+        "start_date": START_DATE,
+        "retries": 1,
+        "retry_delay": timedelta(minutes=1),
+    }
+    dag_default_args.update(dag_defaults)
     dag = DAG(
         dag_name,
-        default_args={
-            "owner": owner,
-            "depends_on_past": DEPENDS_ON_PAST,
-            "start_date": START_DATE,
-            "retries": 1,
-            "retry_delay": timedelta(minutes=1),
-        },
         schedule_interval=SYNC_INTERVAL,
         catchup=CATCHUP,
+        default_args=dag_default_args,
     )
 
     upsert_map, upsert_sequence, triggers = get_upsert_mapping(

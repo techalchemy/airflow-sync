@@ -23,6 +23,7 @@ def create_dag(
     s3_conn_id: str,
     dag_base: str = None,
     owner: str = "airflow",
+    **dag_defaults,
 ):
     if dag_base is not None:
         CONSTANTS = Variable.get(dag_base, deserialize_json=True)
@@ -39,18 +40,20 @@ def create_dag(
     UPLOAD_TIMEOUT = int(CONSTANTS["upload_timeout"])
     CONCURRENT_UPLOADS = int(CONSTANTS["concurrent_uploads"])
     CATCHUP = False
+    dag_default_args = {
+        "depends_on_past": DEPENDS_ON_PAST,
+        "start_date": START_DATE,
+        "retries": 1,
+        "retry_delay": timedelta(seconds=10),
+        "owner": owner,
+    }
+    dag_default_args.update(dag_defaults)
 
     dag = DAG(
         dag_name,
-        default_args={
-            "depends_on_past": DEPENDS_ON_PAST,
-            "start_date": START_DATE,
-            "retries": 1,
-            "retry_delay": timedelta(seconds=10),
-            "owner": owner,
-        },
         schedule_interval=SYNC_INTERVAL,
         catchup=CATCHUP,
+        default_args=dag_default_args,
     )
 
     # operator definitions --------------------------------------------------------------
