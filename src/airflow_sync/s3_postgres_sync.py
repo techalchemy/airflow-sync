@@ -75,8 +75,6 @@ def create_dag(
 
     if not tables:
         tables = [fn.split(".")[0] for fn in get_s3_files(S3_CONNECTION, S3_BUCKET)]
-    # files = get_s3_files(S3_CONNECTION, S3_BUCKET)
-    # log.debug("Found S3 Files: {0}".format(files))
 
     def get_s3_uri(filename: str, **context) -> str:
         new_uri = f"s3://{S3_BUCKET}/{filename}"
@@ -84,6 +82,8 @@ def create_dag(
         return new_uri
 
     def convert_table_to_file(table: str) -> str:
+        if "://" in table:
+            table = Path(table).stem
         formatted_date = (datetime.today() + timedelta(days=-1)).strftime("%Y-%m-%d")
         return f"{table}.csv_{formatted_date}.gz"
 
