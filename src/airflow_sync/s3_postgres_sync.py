@@ -213,10 +213,13 @@ def create_dag(
                 "polling_interval.end_datetime": (
                     "{{ execution_date._datetime.replace(tzinfo=None).isoformat() }}"
                 ),
+                # fmt: off
                 "from_table": (
                     "{{ task_instance.xcom_pull("
-                    f"task_ids='load_s3_file.{uri.table}') }}"
+                    f"task_ids='load_s3_file.{uri.table}'"
+                    ") }}"
                 ),
+                # fmt: on
             },
             on_failure_callback=_cleanup_temp_table,
             dag=dag,
