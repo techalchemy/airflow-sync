@@ -22,6 +22,7 @@ dag_default_args = {
     "retry_delay": timedelta(minutes=0.5),
     "max_active_runs": 1,
     "concurrency": 10,
+    "pool": "default",
 }
 
 

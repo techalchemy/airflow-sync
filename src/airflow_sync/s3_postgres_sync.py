@@ -63,14 +63,16 @@ def create_dag(
     S3_BUCKET = CONSTANTS.get("s3_bucket")
     SYNC_DELTA = CONSTANTS.get("sync_delta", {"days": -10})
     SYNC_INTERVAL = CONSTANTS.get("sync_interval", "10 5 * * *")
-    if owner is not None:
-        dag_default_args.update({"owner": owner})
+    default_owner = owner if owner is not None else dag_default_args["owner"]
+    default_pool = pool if pool is not None else dag_default_args["pool"]
+    dag_default_args.update({"owner": default_owner, "pool": default_pool})
     dag_default_args.update(dag_defaults)
     dag = DAG(
         dag_name,
         default_args=dag_default_args,
         schedule_interval=SYNC_INTERVAL,
         catchup=False,
+        pool=pool,
     )
 
     if not tables:

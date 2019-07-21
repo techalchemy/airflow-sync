@@ -62,6 +62,7 @@ def create_dag(
         "start_date": START_DATE,
         "retries": 1,
         "retry_delay": timedelta(minutes=1),
+        "pool": "default",
     }
     dag_default_args.update(dag_defaults)
     dag = DAG(

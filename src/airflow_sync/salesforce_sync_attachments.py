@@ -46,6 +46,7 @@ def create_dag(
         "retries": 1,
         "retry_delay": timedelta(seconds=10),
         "owner": owner,
+        "pool": "default",
     }
     dag_default_args.update(dag_defaults)
 
