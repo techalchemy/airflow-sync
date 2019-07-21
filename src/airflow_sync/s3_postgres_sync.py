@@ -72,7 +72,6 @@ def create_dag(
         default_args=dag_default_args,
         schedule_interval=SYNC_INTERVAL,
         catchup=False,
-        pool=pool,
     )
 
     if not tables:
